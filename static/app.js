@@ -90,7 +90,7 @@ async function browseFiles(directory){
 }
 
 async function registerProject(path){
-  try{const spec=await post('/api/v1/projects',{workbook_path:path,name:$('project-name-input').value.trim()||null,sheet_name:'APR实时表'});await loadProjects(spec.project_id);await selectProject(spec.project_id);await refreshProjectManager()}
+  try{const spec=await post('/api/v1/projects',{workbook_path:path,sheet_name:'APR实时表'});await loadProjects(spec.project_id);await selectProject(spec.project_id);await refreshProjectManager()}
   catch(e){alert(`注册失败：${e.message}`)}
 }
 

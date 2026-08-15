@@ -82,11 +82,25 @@ class ProjectManager:
 
     def _start_engine(self, project_id: str) -> MonitorEngine:
         if project_id in self.engines:
-            return self.engines[project_id]
+            engine = self.engines[project_id]
+            self._sync_project_name(project_id, engine)
+            return engine
         engine = MonitorEngine(self._settings_for(self.projects[project_id]))
         engine.start()
         self.engines[project_id] = engine
+        self._sync_project_name(project_id, engine)
         return engine
+
+    def _sync_project_name(self, project_id: str, engine: MonitorEngine) -> None:
+        if engine.raw is None:
+            return
+        name = str(engine.aggregate().get("project_name") or "").strip()
+        spec = self.projects[project_id]
+        if name and (spec.get("name") != name or spec.get("name_source") != "APR实时表!A4:C4"):
+            spec["name"] = name
+            spec["name_source"] = "APR实时表!A4:C4"
+            spec["name_synced_at"] = iso_now()
+            self._save_registry()
 
     def engine(self, project_id: str | None = None) -> MonitorEngine:
         target = project_id or self.active_project_id
@@ -98,6 +112,8 @@ class ProjectManager:
         path = Path(workbook_path).expanduser().resolve()
         if path.suffix.casefold() not in {".xlsx", ".xlsm"} or not path.is_file():
             raise ValueError("请选择存在的 .xlsx 或 .xlsm 文件")
+        parsed = WorkbookParser(path, sheet_name).parse()
+        display_name = str(parsed["project"]).strip()
         # The workbook path is the durable identity. This lets a removed project
         # recover its original database even when it is re-added under a new name.
         existing = next(
@@ -110,16 +126,17 @@ class ProjectManager:
         )
         if existing:
             project_id, spec = existing
-            if not spec.get("enabled", True):
-                with self.lock:
+            with self.lock:
+                spec["name"] = display_name
+                spec["name_source"] = "APR实时表!A4:C4"
+                spec["name_synced_at"] = iso_now()
+                if not spec.get("enabled", True):
                     spec["enabled"] = True
                     spec["reactivated_at"] = iso_now()
                     self.active_project_id = project_id
-                    self._save_registry()
-                    self._start_engine(project_id)
+                self._save_registry()
+                self._start_engine(project_id)
             return spec
-        parsed = WorkbookParser(path, sheet_name).parse()
-        display_name = (name or str(parsed.get("project") or path.stem)).strip()
         base_id = project_slug(display_name)
         project_id = base_id
         counter = 2
@@ -139,6 +156,7 @@ class ProjectManager:
         spec = {
             "project_id": project_id,
             "name": display_name,
+            "name_source": "APR实时表!A4:C4",
             "workbook_path": str(path),
             "workbook_name": path.name,
             "sheet_name": sheet_name,
@@ -167,6 +185,8 @@ class ProjectManager:
             if not spec.get("enabled", True):
                 continue
             engine = self.engines.get(project_id)
+            if engine:
+                self._sync_project_name(project_id, engine)
             health = engine.health() if engine else {"status": "STOPPED", "mode": "NOT_STARTED"}
             result.append({**spec, "active": project_id == self.active_project_id, "health": health})
         return result

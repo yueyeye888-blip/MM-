@@ -41,8 +41,13 @@ class MultiProjectTests(unittest.TestCase):
     def test_register_second_project_and_catalog(self):
         second = self.root / "Second.xlsx"
         shutil.copy2(SOURCE, second)
-        spec = self.manager.register(str(second), "Second")
+        workbook = load_workbook(second)
+        workbook["APR实时表"]["A4"] = "Second"
+        workbook.save(second)
+        spec = self.manager.register(str(second), "手工名称必须被忽略")
         self.assertEqual(spec["project_id"], "second")
+        self.assertEqual(spec["name"], "Second")
+        self.assertEqual(spec["name_source"], "APR实时表!A4:C4")
         self.assertEqual(len(self.manager.list_projects()), 2)
         self.manager.update_catalog([{"name": "Second.xlsx", "full_name": str(second), "compatible": True}])
         self.assertTrue(self.manager.open_workbooks()[0]["registered"])
@@ -53,7 +58,15 @@ class MultiProjectTests(unittest.TestCase):
         restored = self.manager.register(str(second), "重新命名也应恢复原项目")
         self.assertEqual(restored["database_path"], database_path)
         self.assertEqual(restored["project_id"], spec["project_id"])
+        self.assertEqual(restored["name"], "Second")
         self.assertTrue(restored["enabled"])
+
+    def test_project_name_is_read_from_a4_c4(self):
+        parser = self.manager.engine("apr").parser
+        cells = parser.read_cells(["A4", "B4", "C4"])
+        self.assertEqual({item["resolved_address"] for item in cells}, {"A4"})
+        self.assertEqual({item["value"] for item in cells}, {"APR"})
+        self.assertEqual(parser.parse()["project"], "APR")
 
     def test_detection_segments_and_combination(self):
         service = DetectionService(self.root / "data" / "control.db", self.manager)

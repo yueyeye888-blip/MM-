@@ -66,8 +66,10 @@
     const sheet = workbook.Worksheets.Item("APR实时表");
     const spotHeader = findHeader(sheet, 10);
     const contractHeader = findHeader(sheet, spotHeader + 2);
+    const projectName = String(value(sheet, 4, 1) || value(sheet, 4, 2) || value(sheet, 4, 3) || "").trim();
+    if (!projectName) throw new Error("项目名称为空：请在 APR实时表!A4:C4 填写项目名称");
     return {
-      project: value(sheet, 4, 1) || "APR",
+      project: projectName,
       spot_price: Number(value(sheet, 4, 4) || 0),
       contract_price: Number(value(sheet, 4, 7) || 0),
       leverage: Number(value(sheet, 4, 10) || 2),

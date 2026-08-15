@@ -182,6 +182,20 @@ class WorkbookParser:
                 return row
         raise ValueError(f"找不到表头: {required}")
 
+    @staticmethod
+    def _project_name(sheet) -> str:
+        """Use the A4:C4 title area as the single source of project identity."""
+        for address in ("A4", "B4", "C4"):
+            resolved = address
+            for merged in sheet.merged_cells.ranges:
+                if address in merged:
+                    resolved = sheet.cell(merged.min_row, merged.min_col).coordinate
+                    break
+            value = str(sheet[resolved].value or "").strip()
+            if value:
+                return value
+        raise ValueError("项目名称为空：请在 APR实时表!A4:C4 填写项目名称")
+
     def _read_accounts(self, sheet, header_row: int, mapping: dict[str, str], account_type: str) -> list[dict]:
         labels = self._labels(sheet, header_row)
         columns = {dest: labels[src] for src, dest in mapping.items() if src in labels}
@@ -220,7 +234,7 @@ class WorkbookParser:
         spot_header = self._find_header(sheet, "账户名称", 10)
         contract_header = self._find_header(sheet, "账户名称", spot_header + 2)
         return {
-            "project": str(global_values.get("项目名称") or "APR"),
+            "project": self._project_name(sheet),
             "spot_price": number(global_values.get("现货市价")),
             "contract_price": number(global_values.get("合约市价")),
             "leverage": number(global_values.get("固定杠杆"), 2),
