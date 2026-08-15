@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JsPlugin>
+  <ApiVersion>1.0.0</ApiVersion>
+  <Name>APRReadOnlyBridge</Name>
+  <Description>APR 做市表本机只读内存监控 Bridge</Description>
+</JsPlugin>

@@ -1,0 +1,16 @@
+{
+	"name": "apr-wps-readonly-bridge",
+	"version": "2.0.0",
+	"private": true,
+	"description": "APR WPS spreadsheet read-only memory bridge",
+	"addonType": "et",
+	"scripts": {
+		"dev": "vite --port 3889",
+		"build": "vite build"
+	},
+	"devDependencies": {
+		"et-jsapi-declare": "latest",
+		"vite": "^5.3.1",
+		"wpsjs": "2.2.3"
+	}
+}

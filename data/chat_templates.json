@@ -1,0 +1,52 @@
+[
+  {
+    "template_id": "current_brief",
+    "name": "当前盘面简报",
+    "description": "直接读取当前快照，适合快速了解当前情况。",
+    "data_source": "CURRENT",
+    "instructions": "请生成可直接发到工作群的汇报，只输出以下内容：\n\n项目：\n检测时间：\n初始资金：\n可用资金：\n现货数量：\n现货持仓均价\n现货总收益：\n合约持仓数量：\n合约总收益：\n项目总收益：\n异常账户：\n\n结论：\n所有金额保留两位小数，变化量必须带正负号。\n没有变化的项目不要显示。\n不要解释计算过程。\n数字要采用千位分隔样式\n除了均价部分，其他数字取消小数点后的数字",
+    "include_accounts": false,
+    "include_events": false,
+    "max_output_tokens": 600
+  },
+  {
+    "template_id": "latest_detection_report",
+    "name": "最近检测汇报",
+    "description": "直接读取最近一个已停止时段，按变化量汇报。",
+    "data_source": "LATEST_SEGMENT",
+    "instructions": "输出一份可直接转发的做市检测汇报，固定格式：\n【检测时间】\n【核心变化】总可用资金、现货数量、现货总收益、合约净持仓、合约总收益、项目总收益\n【账户变化】只列出有变化的账户\n【结论】不超过3句。\n所有变化量必须带正负号；数据不完整时在第一行显著警告。\n数字要采用千位分隔样式\n除了均价部分，其他数字取消小数点后的数字",
+    "include_accounts": true,
+    "include_events": false,
+    "max_output_tokens": 1100
+  },
+  {
+    "template_id": "selected_segments_report",
+    "name": "勾选时段合并汇报",
+    "description": "合并检测列表中勾选的多个时段，后端先精确求和。",
+    "data_source": "SELECTED_SEGMENTS",
+    "instructions": "这是多个检测时段的合并数据。请生成可直接转发的简明汇报：\n1. 时段数量与数据完整性\n2. 资金总变化\n3. 现货数量与收益总变化\n4. 合约持仓与收益总变化\n5. 变化最大的账户\n6. 不超过3句的结论。\n不得自行重新计算或补齐缺失数据。\n数字要采用千位分隔样式\n除了均价部分，其他数字取消小数点后的数字",
+    "include_accounts": true,
+    "include_events": false,
+    "max_output_tokens": 1100
+  },
+  {
+    "template_id": "926cf91c-ec78-4f9f-bddb-bdb7e8b574a4",
+    "name": "简报",
+    "description": "",
+    "data_source": "LATEST_SEGMENT",
+    "instructions": "请生成可直接发到工作群的汇报，只输出以下内容：\n\n项目：\n检测时间：\n总可用资金变化：\n现货数量变化：\n现货总收益变化：\n合约净持仓变化：\n合约总收益变化：\n项目总收益变化：\n阶段时间内现货成交的均价：\n异常账户：\n\n结论：\n所有金额保留两位小数，变化量必须带正负号。\n没有变化的项目不要显示。\n不要解释计算过程。\n阶段时间内现货成交的均价要通过现有变动数据推算出来的\n数字要采用千位分隔样式\n除了均价部分，其他数字取消小数点后的数字",
+    "include_accounts": false,
+    "include_events": false,
+    "max_output_tokens": 1100
+  },
+  {
+    "template_id": "latest_spot_cost_report",
+    "name": "最近时段现货成本",
+    "description": "汇报最近检测时段的持仓成本变化与每一阶段买入成本。",
+    "data_source": "LATEST_SEGMENT",
+    "instructions": "只输出以下现货成本内容：\n1. 检测项目、工作簿和时间\n2. 开始持仓数量、结束持仓数量、阶段消耗资金量（可用资金减少量）\n3. 阶段买入现货到成本均价\n4. 按时间列出每一个买入阶段的账户、买入数量、买入成本和买入均价。\n成本只能使用 spot_cost_analysis，禁止使用现货市价代替；无法推导的阶段明确标记数据不完整。\n5.数字要采用千位分隔样式，除了均价部分，其他数字取消小数点后的数字\n6.现货持仓总均价：你直接抓取G7和H7单元格内对应的值就行\n\n结尾生成一个汇报总结，按照下面这种格式：\n项目标的：\n现货持仓总数量：\n现货持仓总均价：\n阶段买入现货数量：\n阶段买入现货持仓均价：\n阶段买入现货资金：\n剩余可用资金总量：",
+    "include_accounts": true,
+    "include_events": false,
+    "max_output_tokens": 1100
+  }
+]

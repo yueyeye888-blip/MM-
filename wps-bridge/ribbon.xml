@@ -1,0 +1,8 @@
+<!-- WPS add-in entry. The bridge only exposes read/reconcile actions. -->
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnAddinLoad">
+  <ribbon><tabs><tab id="APRMonitorTab" label="APR监控">
+    <group id="APRMonitorGroup" label="只读监控">
+      <button id="APRReconcile" label="立即同步" size="large" onAction="APRBridgeReconcile"/>
+    </group>
+  </tab></tabs></ribbon>
+</customUI>

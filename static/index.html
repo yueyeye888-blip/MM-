@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>做市表格实时监控</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/overrides.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">MULTI-PROJECT MARKET MAKING · LOCAL MONITOR</p>
+      <h1>做市表格实时监控</h1>
+    </div>
+    <div class="top-actions">
+      <select id="project-select" aria-label="选择监控项目"></select>
+      <button id="manage-projects-btn" class="secondary">管理项目</button>
+      <div class="health-block">
+        <span id="health-dot" class="dot"></span>
+        <div><strong id="health-label">正在连接</strong><small id="health-mode">--</small></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="meta-row">
+      <div><span>最近抓取时间</span><strong id="as-of">--</strong></div>
+      <div><span>距最近抓取</span><strong id="lag">--</strong></div>
+      <div><span>现货 / 合约价</span><strong id="prices">--</strong></div>
+      <button id="refresh-btn">立即刷新</button>
+    </section>
+
+    <section id="warning" class="warning hidden"></section>
+
+    <section id="project-manager" class="panel manager-panel hidden">
+      <div class="panel-title"><div><span class="badge neutral">PROJECTS</span><h2>项目与表格</h2></div><button id="close-projects-btn" class="secondary">收起</button></div>
+      <div class="manager-grid">
+        <div>
+          <h3>已监控项目</h3>
+          <div id="registered-projects" class="choice-list">正在读取项目…</div>
+        </div>
+        <div>
+          <h3>WPS 当前打开的表格</h3>
+          <div id="open-workbooks" class="choice-list">正在读取 WPS…</div>
+        </div>
+        <div>
+          <h3>从磁盘注册</h3>
+          <div class="inline-form"><input id="project-name-input" placeholder="项目名称（可选）"><input id="project-path-input" placeholder="Excel 完整路径"><button id="register-path-btn">注册</button></div>
+          <div class="browser-head"><button id="browse-parent-btn" class="secondary">上一级</button><span id="browser-path">桌面</span></div>
+          <div id="file-browser" class="file-browser">正在读取文件…</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel detection-panel">
+      <div class="panel-title">
+        <div><span class="badge ai">DETECTION</span><h2>启动检测</h2></div>
+        <span id="detection-status" class="count">待命</span>
+      </div>
+      <div id="detection-target" class="detection-target">
+        <strong>当前检测：--</strong><small>--</small>
+      </div>
+      <div class="detection-controls">
+        <input id="task-name" placeholder="新任务名称，例如：8月16日晚间做市">
+        <select id="task-select"><option value="">新建检测任务</option></select>
+        <button id="start-detection-btn">开始检测</button>
+        <button id="stop-detection-btn" class="danger" disabled>停止当前时段</button>
+        <button id="end-task-btn" class="secondary" disabled>结束整个任务</button>
+      </div>
+      <p class="hint">停止后可选择原任务继续启动，新时段会归入同一个任务；勾选多个历史时段可生成合并报告。</p>
+      <div id="detection-list" class="detection-list">暂无检测任务</div>
+      <div class="report-actions"><button id="combine-segments-btn" class="secondary">合并所选时段</button></div>
+      <div id="detection-report" class="report-view hidden"></div>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi primary"><span>累计投入</span><strong id="capital">--</strong><small>USDT</small></article>
+      <article class="kpi"><span>总可用资金</span><strong id="funds">--</strong><small>现货+合约账户“现有资金”</small></article>
+      <article class="kpi"><span>现货总收益</span><strong id="spot-total-return">--</strong><small>USDT</small></article>
+      <article class="kpi"><span>合约总收益</span><strong id="contract-total-return">--</strong><small>USDT</small></article>
+      <article class="kpi"><span>项目总收益</span><strong id="total-pnl">--</strong><small>现货总收益 + 合约总收益</small></article>
+      <article class="kpi"><span>综合盈亏平衡价</span><strong id="break-even">--</strong><small>USDT / APR</small></article>
+    </section>
+
+    <section class="columns">
+      <article class="panel">
+        <div class="panel-title"><div><span class="badge spot">SPOT</span><h2>现货仓位</h2></div><span id="spot-count" class="count"></span></div>
+        <div class="metrics">
+          <div><span>总筹码</span><strong id="spot-qty">--</strong></div>
+          <div><span>成本均价</span><strong id="spot-avg">--</strong></div>
+          <div><span>可用资金</span><strong id="spot-available-funds">--</strong></div>
+          <div><span>当前市值</span><strong id="spot-value">--</strong></div>
+          <div><span>当前持仓收益</span><strong id="spot-unrealized">--</strong></div>
+          <div><span>现货总收益</span><strong id="spot-panel-total-return">--</strong></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-title"><div><span class="badge contract">PERP · 2×</span><h2>合约仓位</h2></div><span id="contract-count" class="count"></span></div>
+        <div class="metrics">
+          <div><span>多单数量 / 均价</span><strong id="long-pos">--</strong></div>
+          <div><span>空单数量 / 均价</span><strong id="short-pos">--</strong></div>
+          <div><span>Gross / Net 持仓</span><strong id="gross-net">--</strong></div>
+          <div><span>已实现</span><strong id="contract-realized">--</strong></div>
+          <div><span>未实现</span><strong id="contract-unrealized">--</strong></div>
+          <div><span>合约总收益</span><strong id="contract-panel-total-return">--</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel delta-panel hidden" aria-hidden="true">
+      <div class="panel-title">
+        <div><span class="badge neutral">NET CHANGE</span><h2>分钟净变化</h2></div>
+        <div class="tabs"><button class="active" data-window="1m">1 分钟</button><button data-window="5m">5 分钟</button><button data-window="10m">10 分钟</button></div>
+      </div>
+      <div id="delta-content" class="delta-content">正在读取历史快照…</div>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="panel accounts-panel">
+        <div class="panel-title"><div><span class="badge neutral">ACCOUNTS</span><h2>账户明细</h2></div></div>
+        <div class="table-wrap"><table><thead><tr><th>类型</th><th>账户</th><th>可用资金</th><th>数量</th><th>均价</th><th>当前持仓收益</th><th>质量</th></tr></thead><tbody id="account-rows"></tbody></table></div>
+      </article>
+
+      <article class="panel chat-panel">
+        <div class="panel-title">
+          <div><span class="badge ai">GPT</span><h2>数据对话</h2></div>
+          <div class="chat-title-actions"><button id="template-settings-btn" class="secondary small">编辑模板</button><button id="openai-settings-btn" class="secondary small">API 设置</button></div>
+        </div>
+        <div id="openai-settings" class="api-settings hidden"><input id="openai-key" type="password" placeholder="粘贴 OpenAI API Key（保存到 macOS 钥匙串）"><button id="save-openai-key">安全保存</button></div>
+        <div id="openai-status" class="hint">正在检查 GPT 配置…</div>
+        <div class="template-runner">
+          <select id="chat-template-select" aria-label="选择回答模板"></select>
+          <button id="run-template-btn">按模板生成</button>
+        </div>
+        <div id="template-description" class="hint">模板会先由后端精确取数，再一次性生成。</div>
+        <div id="template-editor" class="template-editor hidden">
+          <div class="template-editor-grid">
+            <input id="template-name" placeholder="模板名称">
+            <select id="template-source">
+              <option value="CURRENT">当前数据快照</option>
+              <option value="LATEST_SEGMENT">最近一个已停止检测</option>
+              <option value="SELECTED_SEGMENTS">检测列表中勾选的时段</option>
+            </select>
+          </div>
+          <input id="template-desc" placeholder="用途说明（可选）">
+          <textarea id="template-instructions" rows="8" placeholder="写清楚你要的字段、顺序、标题、单位和语气。"></textarea>
+          <div class="template-options">
+            <label><input id="template-accounts" type="checkbox"> 包含账户变化</label>
+            <label><input id="template-events" type="checkbox"> 包含全部中间事件</label>
+            <label>篇幅 <select id="template-tokens"><option value="600">精简</option><option value="1100">标准</option><option value="1800">详细</option></select></label>
+          </div>
+          <div class="template-actions"><button id="new-template-btn" class="secondary">新建</button><button id="save-template-btn">保存模板</button><button id="delete-template-btn" class="danger">删除</button><button id="close-template-btn" class="secondary">收起</button></div>
+        </div>
+        <div id="chat-log" class="chat-log"></div>
+        <div class="quick"><button>当前整体情况</button><button>列出检测任务</button><button>总结最近一次检测</button></div>
+        <form id="chat-form"><input id="chat-input" placeholder="输入数据查询…" autocomplete="off"><button>发送</button></form>
+      </article>
+    </section>
+  </main>
+
+  <footer>本地只读监控 · 不回写、不保存、不锁定 Excel</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

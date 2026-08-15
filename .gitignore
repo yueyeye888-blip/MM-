@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.doc_review/
+.DS_Store
+
+# 本地依赖与运行产物
+wps-bridge/node_modules/
+logs/
+*.log
+*preview*.png
+wps_test_screen.png
+
+# 业务数据、聊天记录和运行数据库不进入代码备份
+*.xlsx
+backups/
+data/*.db*
+data/projects/*.db*
+data/projects.json
