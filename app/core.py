@@ -870,7 +870,7 @@ class MonitorEngine:
                 d = data["delta"]
                 body = f"{window.replace('m', '分钟')}净变化：总可用资金 {d['available_funds']:,.2f} USDT，现货总收益 {d['spot_total_return']:,.2f} USDT，合约总收益 {d['contract_total_return']:,.2f} USDT，项目总收益 {d['total_return']:,.2f} USDT。"
         elif intent == "spot":
-            s = summary["spot"]; body = f"现货共 {s['qty']:,.2f} APR，可用资金 {s['available_funds']:,.2f} USDT，现货持仓总均价 {(s['holding_total_avg_cost'] or 0):.6f}（{s['holding_total_avg_cost_source']}），市值 {s['market_value']:,.2f} USDT，现货总收益 {s['total_return']:,.2f} USDT。"
+            s = summary["spot"]; body = f"现货共 {s['qty']:,.2f} APR，可用资金 {s['available_funds']:,.2f} USDT，现货持仓总均价 {(s['holding_total_avg_cost'] or 0):.5f}（{s['holding_total_avg_cost_source']}），市值 {s['market_value']:,.2f} USDT，现货总收益 {s['total_return']:,.2f} USDT。"
         elif intent == "contracts":
             c = summary["contracts"]; body = f"合约多单 {c['long_qty']:,.2f} APR，空单 {c['short_qty']:,.2f} APR，Gross {c['gross_qty']:,.2f}，Net {c['net_qty']:,.2f}，可用资金 {c['available_funds']:,.2f} USDT，合约总收益 {c['total_return']:,.2f} USDT。"
         elif intent == "funds":
@@ -878,7 +878,7 @@ class MonitorEngine:
         elif intent == "breakeven":
             p, s, c = summary["project"], summary["spot"], summary["contracts"]
             be = "净敞口接近 0，无单一盈亏平衡价" if p["break_even"] is None else f"{p['break_even']:.6f}"
-            body = f"现货均价 {(s['avg_cost'] or 0):.6f}，多单均价 {(c['long_avg'] or 0):.6f}，空单均价 {(c['short_avg'] or 0):.6f}，项目综合盈亏平衡价：{be}。"
+            body = f"现货均价 {(s['avg_cost'] or 0):.5f}，多单均价 {(c['long_avg'] or 0):.5f}，空单均价 {(c['short_avg'] or 0):.5f}，项目综合盈亏平衡价：{be}。"
         else:
             p, c, s = summary["project"], summary["capital"], summary["spot"]
             body = f"项目累计投入 {c['cumulative']:,.2f} USDT，总可用资金 {c['available_funds']:,.2f} USDT；现货 {s['qty']:,.2f} APR；现货总收益 {p['spot_total_return']:,.2f} USDT，合约总收益 {p['contract_total_return']:,.2f} USDT，项目总收益 {p['total_return']:,.2f} USDT。"

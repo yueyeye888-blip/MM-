@@ -136,7 +136,7 @@ class MultiProjectTests(unittest.TestCase):
         assistant = DataAssistant(self.manager, service)
         context = assistant._sheet_metric_context("apr", "请读取 G7 和 H7")
         expected = self.manager.engine("apr").parser.read_cells(["G7"])[0]["value"]
-        shown = f"{float(expected):.12g}"
+        shown = f"{float(expected):.5f}"
         self.assertEqual(context["spot_holding_total_avg_cost"], expected)
         self.assertEqual(
             assistant._enforce_sheet_metrics("现货持仓总均价：0.1363360086337764", "apr"),
@@ -152,7 +152,7 @@ class MultiProjectTests(unittest.TestCase):
                 "阶段买入现货持仓均价：0.06",
                 {"data": {"spot_cost_analysis": {"known_purchase_avg_cost": 0.018}}},
             ),
-            "阶段买入现货持仓均价：0.018",
+            "阶段买入现货持仓均价：0.01800",
         )
         self.assertEqual(
             assistant._enforce_sheet_metrics("现货持仓均价：0.1363360086337764", "apr"),
@@ -161,6 +161,23 @@ class MultiProjectTests(unittest.TestCase):
         direct = assistant.ask("现货持仓总均价是多少？读取 G7 和 H7", "apr")
         self.assertEqual(direct["provider"], "LOCAL_VERIFIED_CELL")
         self.assertIn(f"现货持仓总均价：{shown}", direct["answer"])
+
+    def test_all_average_values_use_five_decimals(self):
+        source = (
+            "现货持仓均价：0.03375\n"
+            "- 账户：曹2，买入均价：0.023333333333333334\n"
+            "阶段买入现货持仓均价为 0.018\n"
+            "| 多单均价 | 1,234.5 |\n"
+            "现货数量：8,000,000"
+        )
+        self.assertEqual(
+            DataAssistant._format_average_values(source),
+            "现货持仓均价：0.03375\n"
+            "- 账户：曹2，买入均价：0.02333\n"
+            "阶段买入现货持仓均价为 0.01800\n"
+            "| 多单均价 | 1,234.50000 |\n"
+            "现货数量：8,000,000",
+        )
 
     def test_gpt_56_terra_reasoning_profiles(self):
         service = DetectionService(self.root / "data" / "model-control.db", self.manager)

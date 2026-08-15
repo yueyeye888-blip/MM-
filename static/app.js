@@ -3,6 +3,7 @@ let currentWindow="1m",activeProject=null,activeProjectSpec=null,projectItems=[]
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=(v,d=2)=>v===null||v===undefined||Number.isNaN(Number(v))?"--":Number(v).toLocaleString("zh-CN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const price=v=>v===null||v===undefined?"--":Number(v).toFixed(6);
+const avgPrice=v=>v===null||v===undefined?"--":Number(v).toFixed(5);
 const reportNumber=v=>{if(v===null||v===undefined||Number.isNaN(Number(v)))return"--";const n=Math.trunc(Number(v));return(Object.is(n,-0)?0:n).toLocaleString("zh-CN",{maximumFractionDigits:0})};
 const reportDelta=v=>`${Math.trunc(Number(v)||0)>=0?'+':''}${reportNumber(v)}`;
 const qp=()=>activeProject?`project_id=${encodeURIComponent(activeProject)}`:"";
@@ -38,10 +39,10 @@ async function refresh(){
     $('health-label').textContent=h.status==='ONLINE'?'正常监控':'降级监控';$('health-mode').textContent=h.mode;
     $('health-dot').classList.toggle('online',h.status==='ONLINE');$('capital').textContent=fmt(d.capital.cumulative);$('funds').textContent=fmt(d.capital.available_funds);
     pnl($('spot-total-return'),d.spot.total_return);pnl($('contract-total-return'),d.contracts.total_return);pnl($('total-pnl'),d.project.total_return);
-    $('break-even').textContent=price(d.project.break_even);$('spot-qty').textContent=fmt(d.spot.qty,0);$('spot-avg').textContent=price(d.spot.holding_total_avg_cost);$('spot-avg').title=d.spot.holding_total_avg_cost_source||'APR实时表!G7:H7';
+    $('break-even').textContent=price(d.project.break_even);$('spot-qty').textContent=fmt(d.spot.qty,0);$('spot-avg').textContent=avgPrice(d.spot.holding_total_avg_cost);$('spot-avg').title=d.spot.holding_total_avg_cost_source||'APR实时表!G7:H7';
     $('spot-available-funds').textContent=fmt(d.spot.available_funds);$('spot-value').textContent=fmt(d.spot.market_value);pnl($('spot-unrealized'),d.spot.unrealized);pnl($('spot-panel-total-return'),d.spot.total_return);
-    $('spot-count').textContent=`${d.spot.accounts.length} 个启用账户`;$('long-pos').textContent=`${fmt(d.contracts.long_qty,0)} / ${price(d.contracts.long_avg)}`;
-    $('short-pos').textContent=`${fmt(d.contracts.short_qty,0)} / ${price(d.contracts.short_avg)}`;$('gross-net').textContent=`${fmt(d.contracts.gross_qty,0)} / ${fmt(d.contracts.net_qty,0)}`;
+    $('spot-count').textContent=`${d.spot.accounts.length} 个启用账户`;$('long-pos').textContent=`${fmt(d.contracts.long_qty,0)} / ${avgPrice(d.contracts.long_avg)}`;
+    $('short-pos').textContent=`${fmt(d.contracts.short_qty,0)} / ${avgPrice(d.contracts.short_avg)}`;$('gross-net').textContent=`${fmt(d.contracts.gross_qty,0)} / ${fmt(d.contracts.net_qty,0)}`;
     pnl($('contract-realized'),d.contracts.realized);pnl($('contract-unrealized'),d.contracts.unrealized);pnl($('contract-panel-total-return'),d.contracts.total_return);
     $('contract-count').textContent=`${d.contracts.accounts.length} 个启用账户`;
     const w=$('warning');if(h.warnings.length||d.data_quality.length){w.classList.remove('hidden');w.textContent=`数据提示：${[...h.warnings,...d.data_quality].join(' · ')}`}else w.classList.add('hidden');
@@ -51,8 +52,8 @@ async function refresh(){
 
 function renderAccounts(d){
   const rows=[];
-  for(const x of d.spot.accounts)rows.push(`<tr><td><span class="badge spot">现货</span></td><td>${esc(x.account_name)}</td><td>${fmt(x.current_funds)}</td><td>${fmt(x.position_qty,0)}</td><td>${price(x.spot_avg_cost)}</td><td class="${x.spot_unrealized_pnl>=0?'positive':'negative'}">${fmt(x.spot_unrealized_pnl)}</td><td class="${x.quality_status==='OK'?'quality-ok':'quality-warn'}">${esc(x.quality_status)}</td></tr>`);
-  for(const x of d.contracts.accounts)rows.push(`<tr><td><span class="badge contract">合约${esc(x.direction||'')}</span></td><td>${esc(x.account_name)}</td><td>${fmt(x.current_funds)}</td><td>${fmt(x.position_qty,0)}</td><td>${price(x.contract_avg_entry)}</td><td class="${x.contract_unrealized_pnl>=0?'positive':'negative'}">${fmt(x.contract_unrealized_pnl)}</td><td class="${x.quality_status==='OK'?'quality-ok':'quality-warn'}">${esc(x.quality_status)}</td></tr>`);
+  for(const x of d.spot.accounts)rows.push(`<tr><td><span class="badge spot">现货</span></td><td>${esc(x.account_name)}</td><td>${fmt(x.current_funds)}</td><td>${fmt(x.position_qty,0)}</td><td>${avgPrice(x.spot_avg_cost)}</td><td class="${x.spot_unrealized_pnl>=0?'positive':'negative'}">${fmt(x.spot_unrealized_pnl)}</td><td class="${x.quality_status==='OK'?'quality-ok':'quality-warn'}">${esc(x.quality_status)}</td></tr>`);
+  for(const x of d.contracts.accounts)rows.push(`<tr><td><span class="badge contract">合约${esc(x.direction||'')}</span></td><td>${esc(x.account_name)}</td><td>${fmt(x.current_funds)}</td><td>${fmt(x.position_qty,0)}</td><td>${avgPrice(x.contract_avg_entry)}</td><td class="${x.contract_unrealized_pnl>=0?'positive':'negative'}">${fmt(x.contract_unrealized_pnl)}</td><td class="${x.quality_status==='OK'?'quality-ok':'quality-warn'}">${esc(x.quality_status)}</td></tr>`);
   $('account-rows').innerHTML=rows.join('')||'<tr><td colspan="7">暂无账户</td></tr>';
 }
 
@@ -121,8 +122,8 @@ function renderReport(report){
   const targetHtml=target?`<div class="report-target"><strong>检测对象：${esc(target.project_name)} · ${esc(target.workbook_name)}</strong><small>${esc(target.workbook_path)} · ${esc(target.sheet_name)}</small></div>`:`<div class="report-target"><strong>历史报告：无工作簿标识</strong><small>该报告生成于标识功能上线之前</small></div>`;
   const costCards=[];
   costCards.push(['现货总持仓数量',reportNumber(cost.ending_position_qty)]);
-  costCards.push(['持仓成本变化',reportDelta(cost.position_cost_change)],['阶段买入成本',reportNumber(cost.known_purchase_cost)],['阶段买入均价',price(cost.known_purchase_avg_cost)]);
-  const costHtml=report.spot_cost_analysis?`<h3>现货持仓成本（由持仓数量与资金变化推导，非市价）</h3><div class="cost-summary">${costCards.map(x=>`<div><span>${x[0]}</span><strong>${x[1]}</strong></div>`).join('')}</div>${purchases.length?`<table class="cost-table"><thead><tr><th>阶段</th><th>时间</th><th>账户</th><th>买入数量</th><th>买入成本</th><th>买入均价</th></tr></thead><tbody>${purchases.map(x=>`<tr><td>${esc(x.segment_ordinal?`时段${x.segment_ordinal}-${x.stage}`:x.stage)}</td><td>${esc(new Date(x.captured_at).toLocaleString('zh-CN',{hour12:false}))}</td><td>${esc(x.account_name)}</td><td>${reportNumber(x.bought_qty)}</td><td>${reportNumber(x.purchase_cost)}</td><td>${price(x.purchase_avg_cost)}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">该时段没有检测到可确定推导的现货买入，不会用市价猜测成本。</p>'}`:'';
+  costCards.push(['持仓成本变化',reportDelta(cost.position_cost_change)],['阶段买入成本',reportNumber(cost.known_purchase_cost)],['阶段买入均价',avgPrice(cost.known_purchase_avg_cost)]);
+  const costHtml=report.spot_cost_analysis?`<h3>现货持仓成本（由持仓数量与资金变化推导，非市价）</h3><div class="cost-summary">${costCards.map(x=>`<div><span>${x[0]}</span><strong>${x[1]}</strong></div>`).join('')}</div>${purchases.length?`<table class="cost-table"><thead><tr><th>阶段</th><th>时间</th><th>账户</th><th>买入数量</th><th>买入成本</th><th>买入均价</th></tr></thead><tbody>${purchases.map(x=>`<tr><td>${esc(x.segment_ordinal?`时段${x.segment_ordinal}-${x.stage}`:x.stage)}</td><td>${esc(new Date(x.captured_at).toLocaleString('zh-CN',{hour12:false}))}</td><td>${esc(x.account_name)}</td><td>${reportNumber(x.bought_qty)}</td><td>${reportNumber(x.purchase_cost)}</td><td>${avgPrice(x.purchase_avg_cost)}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">该时段没有检测到可确定推导的现货买入，不会用市价猜测成本。</p>'}`:'';
   const accountChanges=report.account_changes||[];
   const accountHtml=`<details class="report-details"><summary>账户变化（${accountChanges.length}）</summary><pre>${esc(JSON.stringify(accountChanges,null,2))}</pre></details>`;
   const eventsHtml=report.events?`<details class="report-details"><summary>中间变更事件（${report.events.length}）</summary><pre>${esc(JSON.stringify(report.events,null,2))}</pre></details>`:'';

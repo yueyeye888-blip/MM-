@@ -209,7 +209,7 @@ class DataAssistant:
         value = context["spot_holding_total_avg_cost"]
         if value is None:
             return answer
-        shown = f"{float(value):.12g}"
+        shown = f"{float(value):.5f}"
         pattern = re.compile(
             r"(?m)^([ \t]*(?:[-*•][ \t]*)?(?:\*{0,2})现货持仓(?:总)?均价(?:\*{0,2})\s*(?:[:：=]|是|为)\s*)"
             r"[-+]?\d[\d,]*(?:\.\d+)?"
@@ -223,12 +223,30 @@ class DataAssistant:
         value = cost.get("known_purchase_avg_cost")
         if value is None:
             return answer
-        shown = f"{float(value):.12g}"
+        shown = f"{float(value):.5f}"
         pattern = re.compile(
             r"(?m)^([ \t]*(?:[-*•][ \t]*)?(?:\*{0,2})阶段买入现货(?:到成本|持仓)?均价"
             r"(?:\*{0,2})(?:（[^\n）]*）)?\s*(?:[:：=]|是|为)\s*)[-+]?\d[\d,]*(?:\.\d+)?"
         )
         return pattern.sub(lambda match: f"{match.group(1)}{shown}", answer)
+
+    @staticmethod
+    def _format_average_values(answer: str) -> str:
+        """Render every value labelled 均价 with exactly five decimal places."""
+        pattern = re.compile(
+            r"(均价(?:\*{0,2})?(?:[（(][^\n）)]*[）)])?\s*"
+            r"(?:[:：=]|是|为|\|)\s*\*{0,2}\s*)"
+            r"([-+]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?)"
+        )
+
+        def replace(match: re.Match[str]) -> str:
+            try:
+                shown = f"{float(match.group(2).replace(',', '')):,.5f}"
+            except ValueError:
+                return match.group(0)
+            return f"{match.group(1)}{shown}"
+
+        return pattern.sub(replace, answer)
 
     @staticmethod
     def _output_text(response: dict) -> str:
@@ -311,6 +329,7 @@ class DataAssistant:
             "字段定义是强制口径，不得自行解释或改名。展示时使用模板中的中文名称和合适单位，禁止显示 JSON 字段路径。"
             "只输出模板明确点名的指标，不要补充未要求的数字。"
             "严格遵循用户保存的输出要求，不要输出思考过程、数据工具说明或额外建议。"
+            "所有名称中包含‘均价’的数值必须固定保留小数点后5位。"
         )
         prompt = {
             "project_id": project_id,
@@ -344,6 +363,7 @@ class DataAssistant:
         })
         answer = self._enforce_sheet_metrics(self._output_text(response), project_id)
         answer = self._enforce_stage_purchase_avg(answer, context)
+        answer = self._format_average_values(answer)
         if not answer:
             detail = response.get("incomplete_details") or response.get("status") or "unknown"
             raise RuntimeError(f"OpenAI API 未返回文本答案：{detail}")
@@ -373,7 +393,7 @@ class DataAssistant:
         if asks_total_avg and not template and not complex_request:
             metric = self._sheet_metric_context(project_id, question)
             value = metric["spot_holding_total_avg_cost"]
-            shown = "--" if value is None else f"{float(value):.12g}"
+            shown = "--" if value is None else f"{float(value):.5f}"
             return {
                 "answer": f"现货持仓总均价：{shown}\n数据来源：{metric['source_cell']}",
                 "provider": "LOCAL_VERIFIED_CELL",
@@ -402,6 +422,7 @@ class DataAssistant:
             "现货市价绝对不是持仓成本均价或买入均价，不得用市价代替任何成本。"
             "回答必须写明项目、时间范围、数据完整性；has_gap=true 时明确警告。"
             "不得编造未由工具返回的数字。用户允许查看完整账户名称、备注和事件。"
+            "所有名称中包含‘均价’的数值必须固定保留小数点后5位。"
             "使用简洁准确的中文。"
         )
         payload: dict[str, Any] = {
@@ -424,7 +445,9 @@ class DataAssistant:
                 answer = self._output_text(response)
                 if not answer:
                     raise RuntimeError("OpenAI API 未返回文本答案")
-                return {"answer": self._enforce_sheet_metrics(answer, project_id), "provider": "OPENAI", "model": self.model, "response_id": response.get("id")}
+                answer = self._enforce_sheet_metrics(answer, project_id)
+                answer = self._format_average_values(answer)
+                return {"answer": answer, "provider": "OPENAI", "model": self.model, "response_id": response.get("id")}
             outputs = []
             for call in calls:
                 try:
