@@ -162,6 +162,31 @@ class MultiProjectTests(unittest.TestCase):
         self.assertEqual(direct["provider"], "LOCAL_VERIFIED_CELL")
         self.assertIn(f"现货持仓总均价：{shown}", direct["answer"])
 
+    def test_gpt_56_terra_reasoning_profiles(self):
+        service = DetectionService(self.root / "data" / "model-control.db", self.manager)
+        assistant = DataAssistant(self.manager, service)
+        payloads = []
+        assistant.keys.get = lambda: "test-key"
+
+        def fake_call(payload):
+            payloads.append(payload)
+            return {"id": "resp-test", "output_text": "已完成"}
+
+        assistant._call_api = fake_call
+        result = assistant.ask("当前项目情况", "apr")
+        self.assertEqual(result["model"], "gpt-5.6-terra")
+        self.assertEqual(payloads[-1]["reasoning"], {"effort": "low"})
+
+        template = {
+            "template_id": "test-report", "name": "测试报告", "data_source": "CURRENT",
+            "instructions": "输出项目总收益。", "include_accounts": False,
+            "include_events": False, "max_output_tokens": 600,
+        }
+        result = assistant.ask("", "apr", template)
+        self.assertEqual(result["model"], "gpt-5.6-terra")
+        self.assertEqual(payloads[-1]["reasoning"], {"effort": "medium"})
+        self.assertEqual(payloads[-1]["max_output_tokens"], 2200)
+
 
 if __name__ == "__main__":
     unittest.main()

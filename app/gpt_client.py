@@ -103,7 +103,7 @@ TOOLS = [
 
 
 class DataAssistant:
-    def __init__(self, projects: ProjectManager, detections: DetectionService, model: str = "gpt-5-mini"):
+    def __init__(self, projects: ProjectManager, detections: DetectionService, model: str = "gpt-5.6-terra"):
         self.projects = projects
         self.detections = detections
         self.model = model
@@ -336,10 +336,10 @@ class DataAssistant:
             "model": self.model,
             "instructions": instructions,
             "input": json.dumps(prompt, ensure_ascii=False, separators=(",", ":")),
-            # GPT-5 output budget also contains hidden reasoning tokens. Keep the user's
-            # selected answer length while reserving a small separate reasoning margin.
-            "max_output_tokens": int(template.get("max_output_tokens") or 1000) + 800,
-            "reasoning": {"effort": "minimal"},
+            # Reasoning tokens share the output budget. Reports use medium reasoning and
+            # reserve enough headroom while retaining the user's selected answer length.
+            "max_output_tokens": int(template.get("max_output_tokens") or 1000) + 1600,
+            "reasoning": {"effort": "medium"},
             "store": False,
         })
         answer = self._enforce_sheet_metrics(self._output_text(response), project_id)
@@ -406,6 +406,7 @@ class DataAssistant:
         )
         payload: dict[str, Any] = {
             "model": self.model,
+            "reasoning": {"effort": "low"},
             "instructions": instructions,
             "input": json.dumps({
                 "project_id": project_id, "project_name": project["name"], "user_question": question,
@@ -436,5 +437,6 @@ class DataAssistant:
             response = self._call_api({
                 "model": self.model, "previous_response_id": response["id"], "input": outputs,
                 "tools": TOOLS, "instructions": instructions, "max_output_tokens": 1800,
+                "reasoning": {"effort": "low"},
             })
         raise RuntimeError("OpenAI 工具调用轮次过多")

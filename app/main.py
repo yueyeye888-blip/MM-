@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 settings = Settings.load(ROOT / "config.json")
 projects = ProjectManager(ROOT, settings)
 detections = DetectionService(ROOT / "data" / "control.db", projects)
-assistant = DataAssistant(projects, detections, settings.data.get("openai_model", "gpt-5-mini"))
+assistant = DataAssistant(projects, detections, settings.data.get("openai_model", "gpt-5.6-terra"))
 chat_templates = ChatTemplateStore(ROOT / "data" / "chat_templates.json")
 
 

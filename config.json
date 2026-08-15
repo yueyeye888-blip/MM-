@@ -12,7 +12,7 @@
   "correction_session_gap_sec": 60,
   "delta_tolerances_sec": {"1m": 10, "5m": 30, "10m": 60},
   "leverage": 2,
-  "openai_model": "gpt-5-mini",
+  "openai_model": "gpt-5.6-terra",
   "backup_retention_days": null,
   "anomaly_thresholds": {"quantity_ratio": 10, "funds_ratio": 5, "price_min": 0.000001, "price_max": 1000000}
 }

@@ -96,7 +96,7 @@ Bridge 诊断地址：<http://127.0.0.1:8765/api/v1/bridge/status>。其中 `eve
 2. 在看板“数据对话 → API 设置”粘贴 Key。
 3. Key 只写入 macOS 钥匙串的 `APRMonitorOpenAI` 项，不写入源码、浏览器存储或数据库。
 
-也可在启动前设置 `OPENAI_API_KEY`；模型可用 `OPENAI_MODEL` 环境变量覆盖，默认读取 `config.json` 的 `openai_model`。未配置 Key 时，系统自动降级为原有本地规则回答。
+也可在启动前设置 `OPENAI_API_KEY`；模型可用 `OPENAI_MODEL` 环境变量覆盖，默认读取 `config.json` 的 `openai_model`（当前为 `gpt-5.6-terra`）。普通数据问答使用低推理，模板与阶段报告使用中等推理。未配置 Key 时，系统自动降级为原有本地规则回答。
 
 ## 数据目录
 
