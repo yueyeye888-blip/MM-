@@ -775,6 +775,31 @@ class MonitorEngine:
         quality = ",".join(payload["data_quality"]) or "OK"
         self.db.execute("INSERT INTO project_snapshots VALUES (?,?,?,?)", (str(uuid.uuid4()), captured, json_dumps(payload), quality))
 
+    def apply_detection_cost_rebuild(self, snapshot: dict, correction_id: str, note: str) -> None:
+        """Install corrected derived costs without changing the workbook's raw inputs."""
+        captured = iso_now()
+        with self.lock:
+            prices = snapshot.get("prices", {})
+            self.global_state.update({
+                "spot_price": number(prices.get("spot")),
+                "contract_price": number(prices.get("contract")),
+                "leverage": number(prices.get("leverage"), number(self.settings.leverage, 2)),
+                "sheet_spot_total_avg_cost": snapshot.get("spot", {}).get("holding_total_avg_cost"),
+                "sheet_spot_total_avg_cost_cell": snapshot.get("spot", {}).get("holding_total_avg_cost_source"),
+            })
+            for kind, snapshot_key in (("spot", "spot"), ("contract", "contracts")):
+                states = self.spots if kind == "spot" else self.contracts
+                for source_state in snapshot.get(snapshot_key, {}).get("accounts", []):
+                    state = copy.deepcopy(source_state)
+                    state["account_type"] = kind
+                    state["correction_id"] = correction_id
+                    state["note"] = note or state.get("note")
+                    self._persist_state(state, "TASK_CORRECTION_REBUILD", captured, [])
+                    states[normalize_name(state.get("account_name"))] = state
+            self._persist_global("TASK_CORRECTION_REBUILD", captured)
+            self.last_capture_at = captured
+            self._persist_project_snapshot(captured)
+
     def health(self) -> dict:
         now = time.time()
         bridge_age = None if self.last_bridge_at is None else max(0.0, now - self.last_bridge_at)

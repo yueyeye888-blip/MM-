@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id);
-let currentWindow="1m",activeProject=null,activeProjectSpec=null,projectItems=[],currentTasks=[],runningSegment=null,currentDirectory=null,selectedTaskId=null,currentTemplates=[],editingTemplateId=null;
+let currentWindow="1m",activeProject=null,activeProjectSpec=null,projectItems=[],currentTasks=[],runningSegment=null,currentDirectory=null,currentTemplates=[],editingTemplateId=null,detectionTasksExpanded=false,editingCorrectionSegmentId=null,editingCorrectionData=null;
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=(v,d=2)=>v===null||v===undefined||Number.isNaN(Number(v))?"--":Number(v).toLocaleString("zh-CN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const price=v=>v===null||v===undefined?"--":Number(v).toFixed(6);
@@ -25,7 +25,7 @@ function renderDetectionTarget(){
 }
 
 async function selectProject(projectId){
-  await post("/api/v1/projects/select",{project_id:projectId});activeProject=projectId;selectedTaskId=null;
+  await post("/api/v1/projects/select",{project_id:projectId});activeProject=projectId;detectionTasksExpanded=false;closeCorrectionEditor();
   await Promise.all([loadProjects(projectId),refresh(),loadDetections(),loadChatHistory()]);
 }
 
@@ -76,7 +76,7 @@ async function refreshProjectManager(){
 async function removeProject(projectId){
   const spec=projectItems.find(x=>x.project_id===projectId);if(!spec)return;
   if(!confirm(`确定移除“${spec.name} · ${spec.workbook_name}”吗？\n\n只会停止并移除监控登记，数据库和备份会保留。`))return;
-  try{const result=await post(`/api/v1/projects/${projectId}/remove`,{});activeProject=result.active_project_id;selectedTaskId=null;await loadProjects(activeProject);await Promise.all([refresh(),loadDetections(),refreshProjectManager()])}catch(e){alert(`移除失败：${e.message}`)}
+  try{const result=await post(`/api/v1/projects/${projectId}/remove`,{});activeProject=result.active_project_id;detectionTasksExpanded=false;closeCorrectionEditor();await loadProjects(activeProject);await Promise.all([refresh(),loadDetections(),refreshProjectManager()])}catch(e){alert(`移除失败：${e.message}`)}
 }
 
 async function browseFiles(directory){
@@ -96,26 +96,68 @@ async function registerProject(path){
 
 async function loadDetections(){
   if(!activeProject)return;const data=await get(`/api/v1/detections/tasks?${qp()}`);currentTasks=data.items;runningSegment=data.running;
-  const open=currentTasks.filter(x=>x.status==='OPEN');$('task-select').innerHTML='<option value="">新建检测任务</option>'+open.map(x=>`<option value="${esc(x.task_id)}">继续：${esc(x.name)}</option>`).join('');
-  if(runningSegment)selectedTaskId=runningSegment.task_id;
-  if(selectedTaskId&&open.some(x=>x.task_id===selectedTaskId))$('task-select').value=selectedTaskId;else selectedTaskId=null;
-  $('detection-status').textContent=runningSegment?`检测中 · 第 ${runningSegment.ordinal} 时段`:'待命';
-  $('start-detection-btn').disabled=!!runningSegment;$('stop-detection-btn').disabled=!runningSegment;$('end-task-btn').disabled=!($('task-select').value||runningSegment);
+  $('detection-status').textContent=runningSegment?`检测中 · ${esc(runningSegment.task_name||'当前任务')}`:'待命';
+  $('start-detection-btn').disabled=!!runningSegment;$('stop-detection-btn').disabled=!runningSegment;
   renderDetectionList();
 }
 
 function renderDetectionList(){
-  $('detection-list').innerHTML=currentTasks.length?currentTasks.map(task=>`<div class="task-card"><div class="task-head"><strong>${esc(task.name)}</strong><span class="${task.status==='OPEN'?'quality-ok':'count'}">${task.status==='OPEN'?'可继续':'已结束'} · ${new Date(task.created_at).toLocaleString('zh-CN',{hour12:false})}</span></div>${task.segments.length?task.segments.map(s=>`<div class="segment-row"><input type="checkbox" class="segment-check" value="${esc(s.segment_id)}" ${s.status==='RUNNING'?'disabled':''}><strong>时段 ${s.ordinal}</strong><span>${new Date(s.started_at).toLocaleString('zh-CN',{hour12:false})} — ${s.ended_at?new Date(s.ended_at).toLocaleTimeString('zh-CN',{hour12:false}):'检测中'} ${s.has_gap?'<b class="gap">数据不完整</b>':''}</span>${s.report?`<button data-report="${esc(s.segment_id)}" class="secondary">查看报告</button>`:''}<span class="${s.status==='RUNNING'?'quality-ok':'count'}">${s.status}</span></div>`).join(''):'<div class="hint">尚无检测时段</div>'}</div>`).join(''):'暂无检测任务';
+  const visibleTasks=detectionTasksExpanded?currentTasks:currentTasks.slice(0,3),hiddenCount=Math.max(0,currentTasks.length-3);
+  const stopped=currentTasks.flatMap(t=>t.segments.map(s=>({task:t,segment:s}))).filter(x=>x.segment.status==='STOPPED').sort((a,b)=>new Date(b.segment.started_at)-new Date(a.segment.started_at));
+  const latestStoppedId=stopped[0]?.segment.segment_id;
+  const cards=visibleTasks.map(task=>{
+    const legacy=Number(task.workflow_version||1)<2;
+    const segments=task.segments.map(s=>{
+      const version=s.report_version||1,canCorrect=!legacy&&s.status==='STOPPED',isLatest=s.segment_id===latestStoppedId;
+      const actions=s.report?`<div class="task-actions"><button data-report="${esc(s.segment_id)}" class="secondary">查看报告</button>${canCorrect?`<button data-edit-segment="${esc(s.segment_id)}" class="secondary">编辑结束状态</button>`:''}${canCorrect&&isLatest?`<button data-recalibrate="${esc(s.segment_id)}">读取当前 Excel 校正</button>`:''}</div>`:'';
+      return `<div class="segment-row"><input type="checkbox" class="segment-check" value="${esc(s.segment_id)}" ${s.status==='RUNNING'?'disabled':''}><strong>${legacy?`时段 ${s.ordinal}`:'检测任务'}</strong><span>${new Date(s.started_at).toLocaleString('zh-CN',{hour12:false})} — ${s.ended_at?new Date(s.ended_at).toLocaleString('zh-CN',{hour12:false}):'检测中'} ${s.has_gap?'<b class="gap">数据不完整</b>':''}</span>${s.report?`<span class="count">V${version}${s.report_version_source&&s.report_version_source!=='ORIGINAL'?' · 已校正':''}</span>`:''}${actions}<span class="${s.status==='RUNNING'?'quality-ok':'count'}">${s.status==='RUNNING'?'检测中':'已停止'}</span></div>`;
+    }).join('');
+    return `<div class="task-card"><div class="task-head"><strong>${esc(task.name)}</strong><span class="count">${legacy?'历史任务（只读）':'独立任务'} · ${new Date(task.created_at).toLocaleString('zh-CN',{hour12:false})}</span></div>${segments||'<div class="hint">尚无检测记录</div>'}</div>`;
+  }).join('');
+  const toggle=hiddenCount?`<button id="detection-list-toggle" class="secondary detection-list-toggle">${detectionTasksExpanded?'收起，仅显示最新 3 个':`展开其余 ${hiddenCount} 个检测任务`}</button>`:'';
+  $('detection-list').innerHTML=currentTasks.length?cards+toggle:'暂无检测任务';
   document.querySelectorAll('[data-report]').forEach(b=>b.onclick=async()=>renderReport((await get(`/api/v1/detections/segments/${b.dataset.report}`)).report));
+  document.querySelectorAll('[data-edit-segment]').forEach(b=>b.onclick=()=>openCorrectionEditor(b.dataset.editSegment));
+  document.querySelectorAll('[data-recalibrate]').forEach(b=>b.onclick=()=>recalibrateSegment(b.dataset.recalibrate));
+  const toggleButton=$('detection-list-toggle');if(toggleButton)toggleButton.onclick=()=>{detectionTasksExpanded=!detectionTasksExpanded;renderDetectionList()};
 }
 
 async function startDetection(){
-  try{const s=await post('/api/v1/detections/segments/start',{project_id:activeProject,task_id:$('task-select').value||null,task_name:$('task-name').value.trim()||null});selectedTaskId=s.task_id;$('task-name').value='';await loadDetections()}
+  try{await post('/api/v1/detections/segments/start',{project_id:activeProject,task_id:null,task_name:$('task-name').value.trim()||null});$('task-name').value='';await loadDetections()}
   catch(e){alert(`启动失败：${e.message}`)}
 }
-async function stopDetection(){if(!runningSegment)return;try{selectedTaskId=runningSegment.task_id;const s=await post(`/api/v1/detections/segments/${runningSegment.segment_id}/stop`,{});await loadDetections();renderReport(s.report)}catch(e){alert(`停止失败：${e.message}`)}}
-async function endTask(){const id=(runningSegment&&runningSegment.task_id)||$('task-select').value;if(!id)return;try{await post(`/api/v1/detections/tasks/${id}/end`,{});selectedTaskId=null;await loadDetections()}catch(e){alert(`结束失败：${e.message}`)}}
-async function combineSegments(){const ids=[...document.querySelectorAll('.segment-check:checked')].map(x=>x.value);if(!ids.length){alert('请先勾选一个或多个已停止时段');return}try{renderReport(await post('/api/v1/detections/combine',{segment_ids:ids}))}catch(e){alert(`合并失败：${e.message}`)}}
+async function stopDetection(){if(!runningSegment)return;try{const s=await post(`/api/v1/detections/segments/${runningSegment.segment_id}/stop`,{});await loadDetections();renderReport(s.report)}catch(e){alert(`停止失败：${e.message}`)}}
+async function combineSegments(){const ids=[...document.querySelectorAll('.segment-check:checked')].map(x=>x.value);if(!ids.length){alert('请先勾选一个或多个已停止任务');return}try{renderReport(await post('/api/v1/detections/combine',{segment_ids:ids}))}catch(e){alert(`合并失败：${e.message}`)}}
+
+const correctionSourceLabel=source=>({ORIGINAL:'原始报告',CURRENT_WORKBOOK:'Excel 重新校正',MANUAL_EDIT:'手动修改',CASCADE_RECALC:'前序任务联动重算'}[source]||source||'未知');
+function closeCorrectionEditor(){$('task-correction-editor')?.classList.add('hidden');editingCorrectionSegmentId=null;editingCorrectionData=null}
+async function openCorrectionEditor(segmentId){
+  try{editingCorrectionData=await get(`/api/v1/detections/segments/${segmentId}/correction-editor`);editingCorrectionSegmentId=segmentId;renderCorrectionEditor(editingCorrectionData)}catch(e){alert(`无法编辑：${e.message}`)}
+}
+function correctionAccountRows(items,kind){
+  return items.map((x,i)=>`<tr data-correction-kind="${kind}" data-correction-index="${i}"><td>${esc(x.account_name)}</td><td><select data-field="status"><option value="启用" ${x.status==='启用'?'selected':''}>启用</option><option value="停用" ${x.status==='停用'?'selected':''}>停用</option></select></td><td><input data-field="initial_capital" type="number" step="any" value="${esc(x.initial_capital??0)}"></td><td><input data-field="added_capital" type="number" step="any" value="${esc(x.added_capital??0)}"></td><td><input data-field="current_funds" type="number" step="any" value="${esc(x.current_funds??0)}"></td>${kind==='contract'?`<td><input data-field="available_funds" type="number" step="any" value="${esc(x.available_funds??0)}"></td><td><select data-field="direction"><option value="多" ${x.direction==='多'?'selected':''}>多</option><option value="空" ${x.direction==='空'?'selected':''}>空</option></select></td>`:''}<td><input data-field="position_qty" type="number" step="any" value="${esc(x.position_qty??0)}"></td></tr>`).join('');
+}
+function renderCorrectionEditor(data){
+  $('correction-title').textContent=`编辑结束状态 · ${data.task_name} · V${data.version_no}`;
+  $('correction-spot-price').value=data.prices?.spot??'';$('correction-contract-price').value=data.prices?.contract??'';$('correction-leverage').value=data.prices?.leverage??'';$('correction-note').value='';
+  const spot=`<h3>现货账户</h3><table class="correction-table"><thead><tr><th>账户</th><th>状态</th><th>初始投入</th><th>追加投入</th><th>可用资金</th><th>持仓数量</th></tr></thead><tbody>${correctionAccountRows(data.spot_accounts||[],'spot')}</tbody></table>`;
+  const contract=`<h3>合约账户</h3><table class="correction-table"><thead><tr><th>账户</th><th>状态</th><th>初始投入</th><th>追加投入</th><th>现有资金</th><th>可用资金</th><th>方向</th><th>持仓数量</th></tr></thead><tbody>${correctionAccountRows(data.contract_accounts||[],'contract')}</tbody></table>`;
+  $('correction-accounts').innerHTML=spot+contract;
+  $('correction-versions').innerHTML='<strong>报告版本：</strong>'+data.versions.map(v=>`<button class="secondary small" data-version-no="${v.version_no}">V${v.version_no} · ${esc(correctionSourceLabel(v.source))}${v.is_current?' · 当前':''}</button>`).join('');
+  document.querySelectorAll('[data-version-no]').forEach(b=>b.onclick=()=>viewReportVersion(editingCorrectionSegmentId,Number(b.dataset.versionNo)));
+  $('task-correction-editor').classList.remove('hidden');$('task-correction-editor').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function collectCorrectionRows(kind){return [...document.querySelectorAll(`[data-correction-kind="${kind}"]`)].map(row=>{const original=(kind==='spot'?editingCorrectionData.spot_accounts:editingCorrectionData.contract_accounts)[Number(row.dataset.correctionIndex)],result={account_name:original.account_name};row.querySelectorAll('[data-field]').forEach(input=>result[input.dataset.field]=['status','direction'].includes(input.dataset.field)?input.value:Number(input.value));return result})}
+async function saveCorrection(){
+  if(!editingCorrectionSegmentId)return;const note=$('correction-note').value.trim();if(!note){alert('请填写本次修改原因');return}
+  const body={note,prices:{spot:Number($('correction-spot-price').value),contract:Number($('correction-contract-price').value),leverage:Number($('correction-leverage').value)},spot_accounts:collectCorrectionRows('spot'),contract_accounts:collectCorrectionRows('contract')};
+  try{const result=await post(`/api/v1/detections/segments/${editingCorrectionSegmentId}/ending-state`,body);closeCorrectionEditor();await Promise.all([loadDetections(),refresh()]);renderReport(result.report)}catch(e){alert(`保存失败：${e.message}`)}
+}
+async function recalibrateSegment(segmentId){
+  const note=prompt('请填写校正原因。系统将用当前已保存 Excel 作为该任务的正确结束状态，并重算后续成本。');if(!note?.trim())return;
+  try{const result=await post(`/api/v1/detections/segments/${segmentId}/recalibrate`,{note:note.trim()});await Promise.all([loadDetections(),refresh()]);renderReport(result.report)}catch(e){alert(`校正失败：${e.message}`)}
+}
+async function viewReportVersion(segmentId,versionNo){try{const result=await get(`/api/v1/detections/segments/${segmentId}/versions/${versionNo}`);renderReport(result.report)}catch(e){alert(`读取版本失败：${e.message}`)}}
 function renderReport(report){
   if(!report)return;const el=$('detection-report');el.classList.remove('hidden');
   const metrics=report.metrics||[],target=report.target,cost=report.spot_cost_analysis||{},purchases=cost.purchases||[];
@@ -127,7 +169,8 @@ function renderReport(report){
   const accountChanges=report.account_changes||[];
   const accountHtml=`<details class="report-details"><summary>账户变化（${accountChanges.length}）</summary><pre>${esc(JSON.stringify(accountChanges,null,2))}</pre></details>`;
   const eventsHtml=report.events?`<details class="report-details"><summary>中间变更事件（${report.events.length}）</summary><pre>${esc(JSON.stringify(report.events,null,2))}</pre></details>`:'';
-  el.innerHTML=`<div class="panel-title"><div><h2>${report.segment_id?'时段报告':'合并报告'}</h2></div><span class="${report.has_gap?'gap':'quality-ok'}">${report.has_gap?'⚠ 数据存在监控缺口':'数据完整'}</span></div>${targetHtml}<div class="report-grid">${metrics.map(x=>`<div class="report-metric"><span>${esc(x.label)}</span><strong class="${x.delta>=0?'positive':'negative'}">${reportDelta(x.delta)}</strong>${x.start!==undefined?`<small>${reportNumber(x.start)} → ${reportNumber(x.end)}</small>`:''}</div>`).join('')}</div>${costHtml}${accountHtml}${eventsHtml}`;
+  const versionLabel=report.segment_id&&report.version_no?` · V${report.version_no}${report.version_source&&report.version_source!=='ORIGINAL'?` · ${correctionSourceLabel(report.version_source)}`:''}`:'';
+  el.innerHTML=`<div class="panel-title"><div><h2>${report.segment_id?'任务报告':'合并报告'}${versionLabel}</h2></div><span class="${report.has_gap?'gap':'quality-ok'}">${report.has_gap?'⚠ 数据存在监控缺口':'数据完整'}</span></div>${targetHtml}<div class="report-grid">${metrics.map(x=>`<div class="report-metric"><span>${esc(x.label)}</span><strong class="${x.delta>=0?'positive':'negative'}">${reportDelta(x.delta)}</strong>${x.start!==undefined?`<small>${reportNumber(x.start)} → ${reportNumber(x.end)}</small>`:''}</div>`).join('')}</div>${costHtml}${accountHtml}${eventsHtml}`;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
@@ -195,7 +238,8 @@ $('project-select').onchange=e=>selectProject(e.target.value);$('refresh-btn').o
 $('manage-projects-btn').onclick=async()=>{$('project-manager').classList.toggle('hidden');if(!$('project-manager').classList.contains('hidden'))await refreshProjectManager()};
 $('close-projects-btn').onclick=()=>$('project-manager').classList.add('hidden');$('browse-parent-btn').onclick=e=>browseFiles(e.target.dataset.parent);
 $('register-path-btn').onclick=()=>registerProject($('project-path-input').value.trim());
-$('task-select').onchange=e=>{selectedTaskId=e.target.value||null;$('end-task-btn').disabled=!e.target.value};$('start-detection-btn').onclick=startDetection;$('stop-detection-btn').onclick=stopDetection;$('end-task-btn').onclick=endTask;$('combine-segments-btn').onclick=combineSegments;
+$('start-detection-btn').onclick=startDetection;$('stop-detection-btn').onclick=stopDetection;$('combine-segments-btn').onclick=combineSegments;
+$('close-correction-btn').onclick=closeCorrectionEditor;$('cancel-correction-btn').onclick=closeCorrectionEditor;$('save-correction-btn').onclick=saveCorrection;
 $('openai-settings-btn').onclick=()=>$('openai-settings').classList.toggle('hidden');$('save-openai-key').onclick=saveOpenAIKey;
 $('chat-template-select').onchange=()=>{updateTemplateDescription();if(!$('template-editor').classList.contains('hidden'))fillTemplateEditor(activeTemplate())};$('run-template-btn').onclick=runTemplate;
 $('template-settings-btn').onclick=openTemplateEditor;$('new-template-btn').onclick=newTemplate;$('save-template-btn').onclick=saveTemplate;$('delete-template-btn').onclick=deleteTemplate;$('close-template-btn').onclick=()=>$('template-editor').classList.add('hidden');
