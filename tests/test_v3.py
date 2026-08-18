@@ -84,6 +84,73 @@ class MultiProjectTests(unittest.TestCase):
         self.assertIn("现货数量变化", labels)
         self.assertEqual(stopped["report"]["target"]["project_id"], "apr")
 
+    def test_new_detection_is_one_start_per_task_and_auto_ends(self):
+        service = DetectionService(self.root / "data" / "one-period-control.db", self.manager)
+        task = service.create_task("apr", "独立任务")
+        running = service.start_segment("apr", task["task_id"])
+        stopped = service.stop_segment(running["segment_id"])
+        ended_task = service.get_task(task["task_id"])
+        self.assertEqual(stopped["report_version"], 1)
+        self.assertEqual(stopped["report_version_source"], "ORIGINAL")
+        self.assertEqual(ended_task["status"], "ENDED")
+        self.assertEqual(ended_task["workflow_version"], 2)
+        with self.assertRaisesRegex(ValueError, "已经结束"):
+            service.start_segment("apr", task["task_id"])
+
+    def test_manual_ending_state_creates_versions_and_rebuilds_following_task(self):
+        service = DetectionService(self.root / "data" / "correction-control.db", self.manager)
+        first = service.start_segment("apr", task_name="第一任务")
+        first = service.stop_segment(first["segment_id"])
+        time.sleep(0.002)
+        second = service.start_segment("apr", task_name="第二任务")
+        second = service.stop_segment(second["segment_id"])
+
+        editor = service.correction_editor(first["segment_id"])
+        self.assertFalse(editor["can_recalibrate_from_workbook"])
+        account = editor["spot_accounts"][0]
+        corrected_funds = float(account["current_funds"] or 0) - 100000
+        corrected_qty = float(account["position_qty"] or 0) + 100000
+        result = service.edit_ending_state(first["segment_id"], {
+            "spot_accounts": [{
+                "account_name": account["account_name"],
+                "current_funds": corrected_funds,
+                "position_qty": corrected_qty,
+            }]
+        }, "第一次数据填写错误")
+
+        self.assertEqual(result["report_version"], 2)
+        self.assertEqual(result["report_version_source"], "MANUAL_EDIT")
+        self.assertEqual(result["final"]["spot"]["accounts"][0]["current_funds"], corrected_funds)
+        original = service.get_report_version(first["segment_id"], 1)
+        self.assertEqual(original["source"], "ORIGINAL")
+        self.assertNotEqual(original["final"]["spot"]["accounts"][0]["current_funds"], corrected_funds)
+
+        cascaded = service.get_segment(second["segment_id"])
+        self.assertEqual(cascaded["report_version"], 2)
+        self.assertEqual(cascaded["report_version_source"], "CASCADE_RECALC")
+        self.assertEqual(cascaded["versions"][0]["cascade_from"], first["segment_id"])
+
+        result = service.edit_ending_state(first["segment_id"], {
+            "spot_accounts": [{
+                "account_name": account["account_name"],
+                "current_funds": corrected_funds + 1,
+                "position_qty": corrected_qty + 1,
+            }]
+        }, "第二次修正后确认")
+        self.assertEqual(result["report_version"], 3)
+        self.assertEqual(service.get_segment(second["segment_id"])["report_version"], 3)
+
+    def test_only_latest_task_can_recalibrate_from_current_workbook(self):
+        service = DetectionService(self.root / "data" / "workbook-correction-control.db", self.manager)
+        first = service.stop_segment(service.start_segment("apr", task_name="旧任务")["segment_id"])
+        time.sleep(0.002)
+        latest = service.stop_segment(service.start_segment("apr", task_name="最新任务")["segment_id"])
+        with self.assertRaisesRegex(ValueError, "最新一次任务"):
+            service.recalibrate_from_workbook(first["segment_id"], "测试")
+        corrected = service.recalibrate_from_workbook(latest["segment_id"], "从已保存表格重新校正")
+        self.assertEqual(corrected["report_version"], 2)
+        self.assertEqual(corrected["report_version_source"], "CURRENT_WORKBOOK")
+
     def test_saved_workbook_is_captured_immediately(self):
         second = self.root / "Saved.xlsx"
         shutil.copy2(SOURCE, second)

@@ -110,6 +110,17 @@ class SegmentCombine(BaseModel):
     segment_ids: list[str]
 
 
+class DetectionRecalibrate(BaseModel):
+    note: str
+
+
+class DetectionEndingStateEdit(BaseModel):
+    note: str
+    prices: dict = Field(default_factory=dict)
+    spot_accounts: list[dict] = Field(default_factory=list)
+    contract_accounts: list[dict] = Field(default_factory=list)
+
+
 class ApiKeyInput(BaseModel):
     api_key: str
 
@@ -395,6 +406,38 @@ def detection_segment(segment_id: str):
         return detections.get_segment(segment_id)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/v1/detections/segments/{segment_id}/correction-editor")
+def detection_correction_editor(segment_id: str):
+    try:
+        return detections.correction_editor(segment_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/v1/detections/segments/{segment_id}/versions/{version_no}")
+def detection_report_version(segment_id: str, version_no: int):
+    try:
+        return detections.get_report_version(segment_id, version_no)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/v1/detections/segments/{segment_id}/recalibrate")
+def recalibrate_detection(segment_id: str, body: DetectionRecalibrate):
+    try:
+        return detections.recalibrate_from_workbook(segment_id, body.note)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/v1/detections/segments/{segment_id}/ending-state")
+def edit_detection_ending_state(segment_id: str, body: DetectionEndingStateEdit):
+    try:
+        return detections.edit_ending_state(segment_id, body.model_dump(exclude={"note"}), body.note)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/v1/detections/combine")

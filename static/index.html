@@ -63,14 +63,25 @@
       </div>
       <div class="detection-controls">
         <input id="task-name" placeholder="新任务名称，例如：8月16日晚间做市">
-        <select id="task-select"><option value="">新建检测任务</option></select>
         <button id="start-detection-btn">开始检测</button>
         <button id="stop-detection-btn" class="danger" disabled>停止当前时段</button>
-        <button id="end-task-btn" class="secondary" disabled>结束整个任务</button>
       </div>
-      <p class="hint">停止后可选择原任务继续启动，新时段会归入同一个任务；勾选多个历史时段可生成合并报告。</p>
+      <p class="hint">每次启动都会创建一个独立任务；停止后生成报告。需要汇总时，可勾选多个任务生成合并报告。</p>
       <div id="detection-list" class="detection-list">暂无检测任务</div>
-      <div class="report-actions"><button id="combine-segments-btn" class="secondary">合并所选时段</button></div>
+      <div class="report-actions"><button id="combine-segments-btn" class="secondary">合并所选任务</button></div>
+      <div id="task-correction-editor" class="task-correction-editor hidden">
+        <div class="panel-title"><div><span class="badge ai">CORRECTION</span><h2 id="correction-title">编辑任务结束状态</h2></div><button id="close-correction-btn" class="secondary small">关闭</button></div>
+        <p class="hint">只修改结束状态原始字段，资金变化、数量变化、持仓成本和收益由系统重新计算。每次保存都会生成新版本，旧版本不会删除。</p>
+        <div class="correction-prices">
+          <label>现货价格<input id="correction-spot-price" type="number" step="any"></label>
+          <label>合约价格<input id="correction-contract-price" type="number" step="any"></label>
+          <label>杠杆<input id="correction-leverage" type="number" step="any"></label>
+        </div>
+        <div id="correction-accounts" class="table-wrap"></div>
+        <div id="correction-versions" class="correction-versions"></div>
+        <textarea id="correction-note" rows="2" placeholder="必填：说明为什么修改，例如“张一第一次录入资金和数量错误”"></textarea>
+        <div class="template-actions"><button id="save-correction-btn">保存并重新计算后续成本</button><button id="cancel-correction-btn" class="secondary">取消</button></div>
+      </div>
       <div id="detection-report" class="report-view hidden"></div>
     </section>
 
